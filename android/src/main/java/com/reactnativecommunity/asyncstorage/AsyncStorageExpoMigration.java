@@ -26,8 +26,7 @@ public class AsyncStorageExpoMigration {
             return;
         }
 
-        ArrayList<File> expoDatabases = getExpoDatabases(context);
-
+        ArrayList<File> expoDatabases = getFilteredExpoDatabases(context);
         File expoDatabase = getLastModifiedFile(expoDatabases);
 
         if (expoDatabase == null) {
@@ -46,8 +45,12 @@ public class AsyncStorageExpoMigration {
             return;
         }
 
+        // Migrate Databases Write-ahead logging (WAL)
+        migrateWalDatabases(context, expoDatabase);
+
+        // Delete old Expo databases after migration
         try {
-            for (File file : expoDatabases) {
+            for (File file : getExpoDatabases(context)) {
                 if (file.delete()) {
                     Log.v(LOG_TAG, "Deleted scoped database " + file.getName());
                 } else {
@@ -66,15 +69,15 @@ public class AsyncStorageExpoMigration {
     }
 
     // Find all database files that the user may have created while using Expo.
-    private static ArrayList<File> getExpoDatabases(Context context) {
+    private static ArrayList<File> getFilteredExpoDatabases(Context context) {
         ArrayList<File> scopedDatabases = new ArrayList<>();
         try {
-            File databaseDirectory = context.getDatabasePath("noop").getParentFile();
-            File[] directoryListing = databaseDirectory.listFiles();
+            File[] directoryListing = getDirectoryListing(context);
             if (directoryListing != null) {
                 for (File child : directoryListing) {
-                    // Find all databases matching the Expo scoped key, and skip any database journals.
-                    if (child.getName().startsWith("RKStorage-scoped-experience-") && !child.getName().endsWith("-journal")) {
+                    // Find all databases matching the Expo scoped key, and skip any database journals and database in Wal format.
+                    if (child.getName().startsWith("RKStorage-scoped-experience-") && !(child.getName().endsWith("-journal")
+                            || child.getName().endsWith("-shm") || child.getName().endsWith("-wal"))) {
                         scopedDatabases.add(child);
                     }
                 }
@@ -86,9 +89,57 @@ public class AsyncStorageExpoMigration {
         return scopedDatabases;
     }
 
+    private static ArrayList<File> getExpoDatabases(Context context) {
+        ArrayList<File> scopedDatabases = new ArrayList<>();
+        try {
+            File[] directoryListing = getDirectoryListing(context);
+            if (directoryListing != null) {
+                for (File child : directoryListing) {
+                    // Find all databases matching the Expo scoped key, and skip any database journals.
+                    if (child.getName().startsWith("RKStorage-scoped-experience-"))
+                    {
+                        scopedDatabases.add(child);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Just in case anything happens catch and print, file system rules can tend to be different across vendors.
+            e.printStackTrace();
+        }
+        return scopedDatabases;
+    }
+
+    private static File[] getDirectoryListing(Context context){
+        File databaseDirectory = context.getDatabasePath("noop").getParentFile();
+        return databaseDirectory.listFiles();
+    }
+
+    private static void migrateWalDatabases(Context context, File expoDatabase) {
+
+        // Check if the database with the same name and a suffix -wal & -shm (WAL Mode) and keep the databases
+        replaceFile(context, expoDatabase, "-wal");
+        replaceFile(context, expoDatabase, "-shm");
+    }
+
+
+    private static void replaceFile(Context context, File expoDatabase,  String suffix) {
+        File pathFile = new File (expoDatabase.getPath()+suffix);
+        if (pathFile.exists() && pathFile.isFile()){
+            try {
+                copyFile(new FileInputStream(pathFile), new FileOutputStream(context.getDatabasePath(ReactDatabaseSupplier.DATABASE_NAME + suffix)));
+                Log.v(LOG_TAG, "ReactDatabaseSupplier.DATABASE_NAME =  " + ReactDatabaseSupplier.DATABASE_NAME);
+                Log.v(LOG_TAG, "Migrated most recently modified database " + pathFile.getName() + " to RKStorage" + suffix);
+            } catch (Exception e) {
+                Log.v(LOG_TAG, "Failed to migrate scoped database " + pathFile.getName());
+                e.printStackTrace();
+                return;
+            }
+        }
+    }
+
     // Returns the most recently modified file.
-    // If a user publishes an app with Expo, then changes the slug 
-    // and publishes again, a new database will be created. 
+    // If a user publishes an app with Expo, then changes the slug
+    // and publishes again, a new database will be created.
     // We want to select the most recent database and migrate it to RKStorage.
     private static File getLastModifiedFile(ArrayList<File> files) {
         if (files.size() == 0) {
