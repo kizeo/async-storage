@@ -76,8 +76,8 @@ public class AsyncStorageExpoMigration {
             if (directoryListing != null) {
                 for (File child : directoryListing) {
                     // Find all databases matching the Expo scoped key, and skip any database journals and database in Wal format.
-                    if (child.getName().startsWith("RKStorage-scoped-experience-") && (!child.getName().endsWith("-journal")
-                            || !child.getName().endsWith("-shm") || !child.getName().endsWith("-wal"))) {
+                    if (child.getName().startsWith("RKStorage-scoped-experience-") && !(child.getName().endsWith("-journal")
+                            || child.getName().endsWith("-shm") || child.getName().endsWith("-wal"))) {
                         scopedDatabases.add(child);
                     }
                 }
