@@ -127,7 +127,7 @@ public class AsyncStorageExpoMigration {
         if (pathFile.exists() && pathFile.isFile()){
             try {
                 copyFile(new FileInputStream(pathFile), new FileOutputStream(context.getDatabasePath(ReactDatabaseSupplier.DATABASE_NAME + suffix)));
-                Log.v(LOG_TAG, "ReactDatabaseSupplier.DATABASE_NAME) =  " + ReactDatabaseSupplier.DATABASE_NAME);
+                Log.v(LOG_TAG, "ReactDatabaseSupplier.DATABASE_NAME =  " + ReactDatabaseSupplier.DATABASE_NAME);
                 Log.v(LOG_TAG, "Migrated most recently modified database " + pathFile.getName() + " to RKStorage" + suffix);
             } catch (Exception e) {
                 Log.v(LOG_TAG, "Failed to migrate scoped database " + pathFile.getName());
